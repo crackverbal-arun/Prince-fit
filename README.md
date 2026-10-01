@@ -1,36 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Prince Fit
 
-## Getting Started
+Mobile-first app for a personal trainer to manage clients across **workouts, diet, attendance, progress and payments**. Two roles:
 
-First, run the development server:
+- **Prince (trainer):** dashboard of who's in today, who needs a nudge (absent 3+ days, light diet log, package ending, dues), one-tap WhatsApp reminders, and per-client workout plan, meal plan, attendance calendar, progress and packages.
+- **Clients:** check in, log today's workout (with PR detection), tick meals and add plate photos, log weight/measurements/progress photos, and see their package and attendance.
+
+Stack: Next.js 16 (App Router, Server Actions), Tailwind v4, Drizzle ORM + libSQL (SQLite locally, Turso in production), JWT cookie sessions.
+
+## Run locally
 
 ```bash
+npm install
+cp .env.example .env.local      # set SESSION_SECRET, TRAINER_PHONE, TRAINER_PASSWORD
+npm run db:push                 # create tables
+npm run seed                    # create Prince's login  (or: npm run seed:demo for 4 sample clients, password demo123)
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Deploy (Vercel + Turso, both have free tiers)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. `turso db create prince-fit` → copy the URL and `turso db tokens create prince-fit`.
+2. Set `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `SESSION_SECRET`, `TRAINER_*` in Vercel and in `.env.local`.
+3. Run `npm run db:push && npm run seed` once against Turso, then deploy.
+4. Clients add the site to their home screen (works like an app).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Notes
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- WhatsApp nudges open WhatsApp with a pre-written message (wa.me links). No API cost. Automatic sending would need the WhatsApp Business API (e.g. Interakt, AiSensy).
+- Photos are compressed on the phone (~100KB) and stored in the DB. Move them to object storage if the number of clients grows past a few hundred.
+- Dates are in IST.
