@@ -1,6 +1,11 @@
+import { redirect } from "next/navigation";
+import { isSetUp } from "@/lib/setup";
 import { LoginForm } from "./form";
 
-export default function LoginPage() {
+export const dynamic = "force-dynamic";
+
+export default async function LoginPage() {
+  if (!(await isSetUp())) redirect("/setup");
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6 py-10">
       <div className="mb-10">

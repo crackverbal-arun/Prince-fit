@@ -10,7 +10,8 @@
     "db:push": "drizzle-kit push",
     "seed": "tsx scripts/seed.mts",
     "seed:demo": "tsx scripts/seed.mts --demo",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate && node scripts/embed-sql.mjs"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",

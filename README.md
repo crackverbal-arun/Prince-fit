@@ -19,10 +19,16 @@ npm run dev
 
 ## Deploy (Vercel + Turso, both have free tiers)
 
-1. `turso db create prince-fit` → copy the URL and `turso db tokens create prince-fit`.
-2. Set `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `SESSION_SECRET`, `TRAINER_*` in Vercel and in `.env.local`.
-3. Run `npm run db:push && npm run seed` once against Turso, then deploy.
+1. Create a Turso database and a token for it.
+2. Import this repo in Vercel and add these environment variables:
+   - `DATABASE_URL`: the `libsql://…turso.io` URL
+   - `DATABASE_AUTH_TOKEN`: the Turso token
+   - `SESSION_SECRET`: any long random string (32+ characters)
+   - `SETUP_KEY`: any phrase you choose; you'll type it once on the setup page
+3. Deploy, then open `https://<your-app>/setup`. It creates the tables and Prince's login, then switches itself off.
 4. Clients add the site to their home screen (works like an app).
+
+Schema changes: edit `src/db/schema.ts`, then run `npm run db:generate` and `npm run db:push`.
 
 ## Notes
 
