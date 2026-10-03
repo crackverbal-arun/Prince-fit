@@ -1,6 +1,7 @@
 import "server-only";
 import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
-import { db, users, packages, attendance, mealPlan, mealLogs, workoutLogs, workoutPlan, bodyStats, type Package } from "@/db";
+import { db, users, packages, attendance, mealPlan, mealLogs, workoutLogs, workoutPlan, bodyStats, assessments, type Package } from "@/db";
+import { REVIEW_EVERY_DAYS } from "./assessment";
 import { addDays, daysBetween, todayISO } from "./dates";
 
 export type PackageStatus = {
@@ -32,7 +33,7 @@ function pickCurrent(list: PackageStatus[], today: string) {
     ?? list.at(-1) ?? null;
 }
 
-export type Flag = { kind: "missed" | "renewal" | "dues" | "diet" | "nopackage"; label: string };
+export type Flag = { kind: "missed" | "renewal" | "dues" | "diet" | "nopackage" | "assessment"; label: string };
 
 export type ClientSummary = {
   id: string;
@@ -56,7 +57,7 @@ export async function getClientSummaries(): Promise<ClientSummary[]> {
   if (!clients.length) return [];
   const ids = clients.map((c) => c.id);
 
-  const [pkgs, att, plans, logsToday] = await Promise.all([
+  const [pkgs, att, plans, logsToday, lastAssessed] = await Promise.all([
     db.select().from(packages).where(inArray(packages.clientId, ids)).orderBy(desc(packages.startDate)),
     db.select({ clientId: attendance.clientId, date: attendance.date, status: attendance.status, reason: attendance.reason }).from(attendance)
       .where(and(inArray(attendance.clientId, ids), gte(attendance.date, addDays(today, -400)))),
@@ -64,6 +65,8 @@ export async function getClientSummaries(): Promise<ClientSummary[]> {
       .where(inArray(mealPlan.clientId, ids)).groupBy(mealPlan.clientId),
     db.select({ clientId: mealLogs.clientId, n: sql<number>`count(*)` }).from(mealLogs)
       .where(and(inArray(mealLogs.clientId, ids), eq(mealLogs.date, addDays(today, -1)))).groupBy(mealLogs.clientId),
+    db.select({ clientId: assessments.clientId, date: sql<string>`max(${assessments.date})` }).from(assessments)
+      .where(inArray(assessments.clientId, ids)).groupBy(assessments.clientId),
   ]);
 
   return clients.map((c) => {
@@ -91,6 +94,12 @@ export async function getClientSummaries(): Promise<ClientSummary[]> {
         flags.push({ kind: "renewal", label: current.left <= 2 ? `${current.left} sessions left` : `Ends in ${current.daysLeft}d` });
       const due = mine.reduce((sum, s) => sum + s.due, 0);
       if (due > 0) flags.push({ kind: "dues", label: `₹${due.toLocaleString("en-IN")} due` });
+      const assessed = lastAssessed.find((a) => a.clientId === c.id)?.date;
+      if (!assessed) flags.push({ kind: "assessment", label: "Baseline assessment pending" });
+      else {
+        const dueIn = daysBetween(today, addDays(assessed, REVIEW_EVERY_DAYS));
+        if (dueIn <= 7) flags.push({ kind: "assessment", label: dueIn <= 0 ? "3-month assessment due" : `Assessment in ${dueIn}d` });
+      }
       if (mealsTotal > 0 && mealsYesterday < mealsTotal / 2) flags.push({ kind: "diet", label: `Diet ${mealsYesterday}/${mealsTotal} yesterday` });
     }
 
@@ -182,4 +191,8 @@ export async function getExerciseProgress(clientId: string): Promise<ExercisePro
 
 export async function getBodyStats(clientId: string) {
   return db.select().from(bodyStats).where(eq(bodyStats.clientId, clientId)).orderBy(asc(bodyStats.date));
+}
+
+export async function getAssessments(clientId: string) {
+  return db.select().from(assessments).where(eq(assessments.clientId, clientId)).orderBy(asc(assessments.date), asc(assessments.createdAt));
 }

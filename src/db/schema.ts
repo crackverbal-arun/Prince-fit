@@ -95,5 +95,16 @@ export const bodyStats = sqliteTable("body_stats", {
   createdAt: createdAt(),
 }, (t) => [index("body_stats_client_idx").on(t.clientId, t.date)]);
 
+// Baseline + 3-monthly reviews. Field definitions live in src/lib/assessment.ts.
+export const assessments = sqliteTable("assessments", {
+  id: id(),
+  clientId: text("client_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  date: text("date").notNull(),
+  kind: text("kind", { enum: ["baseline", "review"] }).notNull(),
+  data: text("data", { mode: "json" }).$type<Record<string, number | string | string[]>>().notNull(),
+  createdAt: createdAt(),
+}, (t) => [index("assessments_client_idx").on(t.clientId, t.date)]);
+
+export type Assessment = typeof assessments.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Package = typeof packages.$inferSelect;

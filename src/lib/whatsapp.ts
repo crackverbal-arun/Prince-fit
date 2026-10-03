@@ -12,6 +12,7 @@ export function nudgeText(name: string, flags: { kind: string; label: string }[]
   if (kinds.has("missed")) lines.push("Haven't seen you at the gym for a few days — let's get back on track. What time works for your next session?");
   if (kinds.has("diet")) lines.push("Noticed your meal log was light yesterday. Tick off your meals in the app today, it really helps me adjust your plan.");
   if (kinds.has("renewal") || kinds.has("nopackage")) lines.push("Your package is about to run out. Shall I set up the next one so we don't lose momentum?");
+  if (kinds.has("assessment")) lines.push("It's time for your fitness assessment, so we can measure how far you've come and plan the next 3 months. When can you do a 60–90 min slot?");
   if (kinds.has("dues")) {
     const due = flags.find((f) => f.kind === "dues")?.label.replace(" due", "");
     lines.push(`Gentle reminder: ${due} is pending on your package.`);

@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { requireClient } from "@/lib/dal";
+import { IconChevron } from "@/components/icons";
 import { getAttendance, getPackages, getWorkoutPlan } from "@/lib/queries";
 import { addDays, DAYS, todayISO } from "@/lib/dates";
 import { logout } from "@/app/actions/auth";
@@ -17,6 +19,11 @@ export default async function MyPlan() {
     <>
       <h1 className="mb-4 text-2xl font-bold tracking-tight">My plan</h1>
       {current ? <PackageCard s={current} /> : <Empty>No active package. Talk to Prince.</Empty>}
+
+      <Link href="/me/assessment" className="card mt-3 flex items-center justify-between">
+        <span><span className="block font-semibold">Fitness assessment</span><span className="text-xs text-muted">Baseline and 3-month results</span></span>
+        <IconChevron className="size-4 text-muted" />
+      </Link>
 
       <h2 className="h-section">Attendance</h2>
       <div className="card"><AttendanceCalendar marks={toMarks(att)} /></div>

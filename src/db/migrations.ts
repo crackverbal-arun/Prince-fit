@@ -25,5 +25,9 @@ export const MIGRATIONS: string[][] = [
     "ALTER TABLE `workout_logs` ADD `duration_sec` integer;",
     "ALTER TABLE `workout_plan` ADD `metric` text DEFAULT 'weight' NOT NULL;",
     "ALTER TABLE `workout_plan` ADD `target_sec` integer;"
+  ],
+  [
+    "CREATE TABLE IF NOT EXISTS `assessments` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`client_id` text NOT NULL,\n\t`date` text NOT NULL,\n\t`kind` text NOT NULL,\n\t`data` text NOT NULL,\n\t`created_at` integer DEFAULT (unixepoch()) NOT NULL,\n\tFOREIGN KEY (`client_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade\n);",
+    "CREATE INDEX IF NOT EXISTS `assessments_client_idx` ON `assessments` (`client_id`,`date`);"
   ]
 ];

@@ -98,6 +98,24 @@ if (process.argv.includes("--demo")) {
         await db.insert(s.bodyStats).values({ clientId: id, date, weightKg: weight, waistCm: +(weight * 0.98).toFixed(1), chestCm: 98, armCm: 33 });
       }
     }
+    if (d.name.startsWith("Rahul")) {
+      const base = { age: 34, gender: "Male", occupation: "Sales manager, desk + travel", jobType: ["Sitting"], dietType: "Non-veg", goals: ["Fat loss", "Strength"], targetWeight: 82, height: 175 };
+      await db.insert(s.assessments).values([
+        { clientId: id, date: addDays(today, -92), kind: "baseline", data: { ...base, weight: 94.5, waist: 101, painBack: 4, painKnee: 2, overheadSquat: "Fair", shoulderMobility: "Fair", sitReach: "Poor",
+          pushups30s: 11, latPulldownKg: 35, latPulldownReps: 8, squats1min: 28, plank: 45, restingHr: 84, bloodPressure: "132/86", cooperDistance: 1.6, balanceRight: 14, balanceLeft: 19,
+          sleepHours: 6, sleepQuality: 4, stress: 7, water: 1.5, steps: 4000, protein: 60, mealsPerDay: 3,
+          postureIssues: "Forward head, rounded shoulders", weakMuscles: "Glutes, core", tightMuscles: "Hip flexors, pecs", injuryRisks: "Lower back under heavy hinge",
+          priority1: "Core + glute activation", priority2: "Fat loss via steps and diet", program: ["Corrective exercises", "Strength training", "Cardio", "Nutrition guidance"] } },
+        { clientId: id, date: addDays(today, -2), kind: "review", data: { ...base, weight: 88.2, waist: 95, painBack: 1, painKnee: 1, overheadSquat: "Good", shoulderMobility: "Good", sitReach: "Fair",
+          pushups30s: 19, latPulldownKg: 45, latPulldownReps: 10, squats1min: 38, plank: 95, restingHr: 74, bloodPressure: "124/80", cooperDistance: 2.1, balanceRight: 28, balanceLeft: 31,
+          sleepHours: 7, sleepQuality: 6, stress: 5, water: 3, steps: 8000, protein: 110, mealsPerDay: 4,
+          postureIssues: "Head position improved", weakMuscles: "Upper back endurance", injuryRisks: "Low", priority1: "Progressive overload on compounds", priority2: "Hold 8k steps",
+          program: ["Strength training", "Cardio", "Mobility work"] } },
+      ]);
+    }
+    if (d.name.startsWith("Sneha")) {
+      await db.insert(s.assessments).values({ clientId: id, date: addDays(today, -86), kind: "baseline", data: { age: 29, gender: "Female", weight: 64, pushups30s: 8, plank: 50, squats1min: 32, restingHr: 72 } });
+    }
     console.log(`Demo client ${d.name} · ${d.phone} / demo123`);
   }
 }

@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { db, users } from "@/db";
 import { requireTrainer } from "@/lib/dal";
-import { getClientSummaries } from "@/lib/queries";
+import { getAssessments, getClientSummaries } from "@/lib/queries";
+import { AssessmentReport } from "@/components/assessment-report";
 import { nudgeText, waLink } from "@/lib/whatsapp";
 import { Avatar, Chip, flagTone } from "@/components/ui";
 import { IconBack, IconWhatsApp } from "@/components/icons";
@@ -13,12 +14,13 @@ import { WorkoutTab } from "./workout";
 import { DietTab } from "./diet";
 import { PackageTab } from "./package";
 
-const TABS = [["overview", "Overview"], ["workout", "Workout"], ["diet", "Diet"], ["progress", "Progress"], ["package", "Package"]] as const;
+const TABS = [["overview", "Overview"], ["assessment", "Assessment"], ["workout", "Workout"], ["diet", "Diet"], ["progress", "Progress"], ["package", "Package"]] as const;
 
 export default async function ClientPage(props: PageProps<"/trainer/clients/[id]">) {
   await requireTrainer();
   const { id } = await props.params;
-  const tab = String((await props.searchParams).tab ?? "overview");
+  const sp = await props.searchParams;
+  const tab = String(sp.tab ?? "overview");
   const client = await db.query.users.findFirst({ where: and(eq(users.id, id), eq(users.role, "client")) });
   if (!client) notFound();
   const summary = (await getClientSummaries()).find((c) => c.id === id)!;
@@ -54,6 +56,7 @@ export default async function ClientPage(props: PageProps<"/trainer/clients/[id]
           : tab === "diet" ? <DietTab clientId={id} />
           : tab === "progress" ? <ProgressView clientId={id} />
           : tab === "package" ? <PackageTab clientId={id} />
+          : tab === "assessment" ? <AssessmentReport list={await getAssessments(id)} selectedId={sp.a ? String(sp.a) : undefined} clientId={id} editable />
           : <OverviewTab client={client} />}
       </div>
     </>

@@ -36,4 +36,5 @@ Schema changes: edit `src/db/schema.ts`, then run `npm run db:generate` (writes 
 - Photos are compressed on the phone (~100KB) and stored in the DB. Move them to object storage if the number of clients grows past a few hundred.
 - Dates are in IST.
 - Exercises are tracked by weight × reps or by time (plank, cardio). For timed work, longer counts as better.
+- Assessments: a baseline, then a review every 90 days (flagged on the dashboard). The form's fields are defined in `src/lib/assessment.ts`; add or change fields there. They're stored as JSON, so no database change is needed. Reports compare against the baseline and raise warnings for high resting HR, blood pressure, peak HR or pain of 6/10 and above.
 - Attendance per day is present, absent (with a reason) or not marked. Clients can mark themselves absent; logging a workout overrides it.
