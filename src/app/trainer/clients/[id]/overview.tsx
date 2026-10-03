@@ -1,8 +1,10 @@
 import type { User } from "@/db";
 import { getAttendance, getMealLogs, getMealPlan, getWorkoutLogs } from "@/lib/queries";
 import { addDays, fmtDate, todayISO } from "@/lib/dates";
-import { setActive, toggleAttendance, updateClient } from "@/app/actions/trainer";
-import { AttendanceCalendar } from "@/components/attendance-calendar";
+import { logSummary } from "@/lib/format";
+import { setActive, updateClient } from "@/app/actions/trainer";
+import { toMarks } from "@/components/attendance-calendar";
+import { AttendanceEditor } from "./attendance-editor";
 import { Submit } from "@/components/submit";
 import { Bar, Empty } from "@/components/ui";
 import { ResetPassword } from "./reset-password";
@@ -24,16 +26,9 @@ export async function OverviewTab({ client }: { client: User }) {
       <section className="card">
         <div className="mb-3 flex items-baseline justify-between">
           <span className="text-sm font-semibold">Attendance</span>
-          <span className="text-[11px] text-muted">Tap a day to mark or unmark</span>
+          <span className="text-[11px] text-muted">Tap a day: present or absent</span>
         </div>
-        <AttendanceCalendar
-          present={att}
-          renderCell={(date, _on, cell) => (
-            <form action={toggleAttendance.bind(null, client.id, date)}>
-              <button className="w-full" aria-label={`Toggle ${date}`}>{cell}</button>
-            </form>
-          )}
-        />
+        <AttendanceEditor clientId={client.id} marks={toMarks(att)} />
       </section>
 
       <section className="card">
@@ -59,7 +54,7 @@ export async function OverviewTab({ client }: { client: User }) {
             <div key={date} className="px-4 py-3">
               <div className="mb-1 text-xs font-semibold text-muted">{fmtDate(date)}</div>
               {rows.map((r) => (
-                <div key={r.id} className="flex justify-between text-sm"><span>{r.exercise}</span><span className="text-muted">{r.sets}×{r.reps} @ {r.weightKg}kg</span></div>
+                <div key={r.id} className="flex justify-between text-sm"><span>{r.exercise}</span><span className="text-muted">{logSummary(r)}</span></div>
               ))}
             </div>
           ))}

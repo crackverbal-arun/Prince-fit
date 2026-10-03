@@ -58,7 +58,7 @@ export async function getClientSummaries(): Promise<ClientSummary[]> {
 
   const [pkgs, att, plans, logsToday] = await Promise.all([
     db.select().from(packages).where(inArray(packages.clientId, ids)).orderBy(desc(packages.startDate)),
-    db.select({ clientId: attendance.clientId, date: attendance.date }).from(attendance)
+    db.select({ clientId: attendance.clientId, date: attendance.date, status: attendance.status, reason: attendance.reason }).from(attendance)
       .where(and(inArray(attendance.clientId, ids), gte(attendance.date, addDays(today, -400)))),
     db.select({ clientId: mealPlan.clientId, n: sql<number>`count(*)` }).from(mealPlan)
       .where(inArray(mealPlan.clientId, ids)).groupBy(mealPlan.clientId),
@@ -67,7 +67,10 @@ export async function getClientSummaries(): Promise<ClientSummary[]> {
   ]);
 
   return clients.map((c) => {
-    const dates = att.filter((a) => a.clientId === c.id).map((a) => a.date).sort();
+    const records = att.filter((a) => a.clientId === c.id).sort((a, b) => a.date.localeCompare(b.date));
+    const dates = records.filter((a) => a.status === "present").map((a) => a.date);
+    // Most recent absence after the last visit, so Prince knows *why* before nudging
+    const absence = records.findLast((a) => a.status === "absent" && (!dates.length || a.date > dates.at(-1)!));
     const lastVisit = dates.at(-1) ?? null;
     const daysSinceVisit = lastVisit ? daysBetween(lastVisit, today) : null;
     const mine = pkgs.filter((p) => p.clientId === c.id).map((p) => packageStatus(p, dates, today));
@@ -79,7 +82,8 @@ export async function getClientSummaries(): Promise<ClientSummary[]> {
     const flags: Flag[] = [];
     if (c.active) {
       if (daysSinceVisit === null) flags.push({ kind: "missed", label: "Never checked in" });
-      else if (daysSinceVisit >= 3) flags.push({ kind: "missed", label: `Absent ${daysSinceVisit}d` });
+      else if (daysSinceVisit >= 3)
+        flags.push({ kind: "missed", label: `Absent ${daysSinceVisit}d${absence?.reason ? ` · ${absence.reason}` : ""}` });
       if (!current) flags.push({ kind: "nopackage", label: "No package" });
       else if (renewed) { /* next package already booked */ }
       else if (current.expired) flags.push({ kind: "renewal", label: "Package ended" });
@@ -111,7 +115,7 @@ export async function getPackages(clientId: string) {
   const today = todayISO();
   const [pkgs, att] = await Promise.all([
     db.select().from(packages).where(eq(packages.clientId, clientId)).orderBy(desc(packages.startDate)),
-    db.select({ date: attendance.date }).from(attendance).where(eq(attendance.clientId, clientId)),
+    db.select({ date: attendance.date }).from(attendance).where(and(eq(attendance.clientId, clientId), eq(attendance.status, "present"))),
   ]);
   const dates = att.map((a) => a.date);
   const all = pkgs.map((p) => packageStatus(p, dates, today));
@@ -119,10 +123,12 @@ export async function getPackages(clientId: string) {
   return { current, others: all.filter((s) => s !== current) };
 }
 
+export type AttendanceDay = { status: "present" | "absent"; reason: string | null; markedBy: "client" | "trainer" };
+
 export async function getAttendance(clientId: string, fromDate: string) {
-  const rows = await db.select({ date: attendance.date, markedBy: attendance.markedBy }).from(attendance)
-    .where(and(eq(attendance.clientId, clientId), gte(attendance.date, fromDate)));
-  return new Map(rows.map((r) => [r.date, r.markedBy]));
+  const rows = await db.select({ date: attendance.date, status: attendance.status, reason: attendance.reason, markedBy: attendance.markedBy })
+    .from(attendance).where(and(eq(attendance.clientId, clientId), gte(attendance.date, fromDate)));
+  return new Map<string, AttendanceDay>(rows.map(({ date, ...r }) => [date, r]));
 }
 
 export async function getWorkoutPlan(clientId: string) {
@@ -145,15 +151,33 @@ export async function getWorkoutLogs(clientId: string, fromDate?: string) {
     .orderBy(desc(workoutLogs.date));
 }
 
-// Best weight per exercise (ties broken by reps), plus when it was set.
-export async function getPRs(clientId: string) {
-  const logs = await getWorkoutLogs(clientId);
-  const best = new Map<string, (typeof logs)[number]>();
-  for (const l of logs) {
-    const b = best.get(l.exercise);
-    if (!b || l.weightKg > b.weightKg || (l.weightKg === b.weightKg && l.reps > b.reps)) best.set(l.exercise, l);
-  }
-  return [...best.values()].sort((a, b) => b.date.localeCompare(a.date));
+type Log = Awaited<ReturnType<typeof getWorkoutLogs>>[number];
+
+// What "better" means for one log: longer hold/run for timed work, heavier (then more reps) otherwise.
+export function score(l: Pick<Log, "weightKg" | "reps" | "durationSec">) {
+  return l.durationSec != null ? l.durationSec : l.weightKg * 1000 + l.reps;
+}
+
+export type ExerciseProgress = {
+  exercise: string;
+  timed: boolean;
+  points: { date: string; value: number }[]; // kg or seconds per session
+  first: number;
+  latest: number;
+  best: Log;
+  sessions: number;
+};
+
+// Per-exercise history for the Progress screen: trend, first vs latest, personal best.
+export async function getExerciseProgress(clientId: string): Promise<ExerciseProgress[]> {
+  const logs = (await getWorkoutLogs(clientId)).reverse(); // oldest first
+  const byExercise = Map.groupBy(logs, (l) => l.exercise);
+  return [...byExercise].map(([exercise, rows]) => {
+    const timed = rows.some((r) => r.durationSec != null);
+    const points = rows.map((r) => ({ date: r.date, value: timed ? (r.durationSec ?? 0) : r.weightKg }));
+    const best = rows.reduce((b, r) => (score(r) > score(b) ? r : b));
+    return { exercise, timed, points, first: points[0].value, latest: points.at(-1)!.value, best, sessions: rows.length };
+  }).sort((a, b) => b.points.at(-1)!.date.localeCompare(a.points.at(-1)!.date));
 }
 
 export async function getBodyStats(clientId: string) {

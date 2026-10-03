@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { timingSafeEqual } from "node:crypto";
 import { redirect } from "next/navigation";
 import { db, users } from "@/db";
-import { INIT_SQL } from "@/db/init-sql";
+import { createSchema } from "@/db/migrate";
 import { createSession } from "@/lib/session";
 import { normalizePhone } from "@/lib/validate";
 import { isSetUp } from "@/lib/setup";
@@ -23,7 +23,7 @@ export async function runSetup(_: unknown, formData: FormData): Promise<{ error?
   if (phone.length !== 10) return { error: "Enter a 10-digit mobile number." };
   if (password.length < 6) return { error: "Password needs at least 6 characters." };
 
-  for (const stmt of INIT_SQL) await db.run(stmt);
+  await createSchema();
   const [trainer] = await db.insert(users).values({ role: "trainer", name, phone, passwordHash: await bcrypt.hash(password, 10) }).returning();
   await createSession({ userId: trainer.id, role: "trainer" });
   redirect("/trainer");

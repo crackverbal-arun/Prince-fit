@@ -28,3 +28,18 @@ export function fmtDate(iso: string) {
 export function rupees(n: number) {
   return "₹" + n.toLocaleString("en-IN");
 }
+
+export function fmtDuration(sec: number) {
+  if (sec < 60) return `${sec}s`;
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  if (h) return `${h}h${m ? ` ${m}m` : ""}`;
+  return `${m}m${s ? ` ${s}s` : ""}`;
+}
+
+// "1:30" style, for pre-filling inputs
+export function clockDuration(sec: number) {
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+export const ABSENCE_REASONS = ["Sick", "Travel", "Work", "Family", "Injury", "Other"];

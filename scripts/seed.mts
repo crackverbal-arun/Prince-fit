@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/libsql";
 import * as s from "../src/db/schema";
 import { addDays, todayISO, dayOfWeek } from "../src/lib/dates";
+import { parseDuration } from "../src/lib/validate";
 
 try { process.loadEnvFile(".env.local"); } catch {}
 const db = drizzle({ connection: { url: process.env.DATABASE_URL ?? "file:local.db", authToken: process.env.DATABASE_AUTH_TOKEN }, schema: s });
@@ -65,7 +66,9 @@ if (process.argv.includes("--demo")) {
     await db.insert(s.packages).values({ clientId: id, name: `${cur.total} sessions · monthly`, totalSessions: cur.total, startDate: cur.start, endDate: cur.end, amount: 18000, paid: Math.round(18000 * d.paid) });
 
     for (const day of d.days) for (const [i, [exercise, sets, reps, kg]] of workouts[day].entries())
-      await db.insert(s.workoutPlan).values({ clientId: id, dayOfWeek: day, exercise, sets, reps, targetKg: kg || null, position: i });
+      await db.insert(s.workoutPlan).values(kg
+        ? { clientId: id, dayOfWeek: day, exercise, sets, reps, targetKg: kg, position: i }
+        : { clientId: id, dayOfWeek: day, exercise, sets, reps: "1", metric: "time", targetSec: parseDuration(reps), position: i });
     const mealIds = [];
     for (const [i, [slot, description]] of meals.entries())
       mealIds.push((await db.insert(s.mealPlan).values({ clientId: id, slot, description, position: i }).returning())[0].id);
@@ -79,8 +82,15 @@ if (process.argv.includes("--demo")) {
       if (planned && r() < (quitting && recent ? 0 : d.show)) {
         await db.insert(s.attendance).values({ clientId: id, date, markedBy: r() > 0.3 ? "client" : "trainer" }).onConflictDoNothing();
         const progress = (42 - back) / 42;
-        for (const [exercise, sets, reps, kg] of workouts[dayOfWeek(date)])
-          if (kg) await db.insert(s.workoutLogs).values({ clientId: id, date, exercise, sets, reps: parseInt(reps), weightKg: Math.round((kg * (0.85 + progress * 0.25)) * 2) / 2 }).onConflictDoNothing();
+        for (const [exercise, sets, reps, kg] of workouts[dayOfWeek(date)]) {
+          const v = kg
+            ? { reps: parseInt(reps), weightKg: Math.round((kg * (0.85 + progress * 0.25)) * 2) / 2 }
+            : { reps: 1, durationSec: Math.round(parseDuration(reps)! * (0.7 + progress * 0.45) / 5) * 5 };
+          await db.insert(s.workoutLogs).values({ clientId: id, date, exercise, sets, ...v }).onConflictDoNothing();
+        }
+      } else if (planned && (quitting && recent ? true : r() < 0.5)) {
+        const reason = quitting ? "Injury: lower back flare-up" : ["Work", "Travel", "Sick", "Family: cousin's wedding"][Math.floor(r() * 4)];
+        await db.insert(s.attendance).values({ clientId: id, date, markedBy: "client", status: "absent", reason }).onConflictDoNothing();
       }
       for (const mealId of mealIds) if (r() < (quitting && recent ? 0.15 : d.diet)) await db.insert(s.mealLogs).values({ clientId: id, mealPlanId: mealId, date }).onConflictDoNothing();
       if (back % 7 === 0) {

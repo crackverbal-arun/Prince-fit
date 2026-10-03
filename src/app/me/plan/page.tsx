@@ -2,8 +2,9 @@ import { requireClient } from "@/lib/dal";
 import { getAttendance, getPackages, getWorkoutPlan } from "@/lib/queries";
 import { addDays, DAYS, todayISO } from "@/lib/dates";
 import { logout } from "@/app/actions/auth";
+import { planTarget } from "@/lib/format";
 import { PackageCard } from "@/components/package-card";
-import { AttendanceCalendar } from "@/components/attendance-calendar";
+import { AttendanceCalendar, toMarks } from "@/components/attendance-calendar";
 import { Empty } from "@/components/ui";
 import { PasswordForm } from "./password-form";
 
@@ -18,7 +19,7 @@ export default async function MyPlan() {
       {current ? <PackageCard s={current} /> : <Empty>No active package. Talk to Prince.</Empty>}
 
       <h2 className="h-section">Attendance</h2>
-      <div className="card"><AttendanceCalendar present={att} /></div>
+      <div className="card"><AttendanceCalendar marks={toMarks(att)} /></div>
 
       <h2 className="h-section">Weekly workout</h2>
       {plan.length ? (
@@ -29,7 +30,7 @@ export default async function MyPlan() {
               {plan.filter((p) => p.dayOfWeek === d).map((p) => (
                 <div key={p.id} className="flex justify-between py-0.5 text-sm">
                   <span>{p.exercise}</span>
-                  <span className="text-muted">{p.sets}×{p.reps}{p.targetKg ? ` · ${p.targetKg}kg` : ""}</span>
+                  <span className="text-muted">{planTarget(p)}</span>
                 </div>
               ))}
             </div>

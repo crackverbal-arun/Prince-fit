@@ -34,6 +34,8 @@ export const attendance = sqliteTable("attendance", {
   clientId: text("client_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   date: text("date").notNull(),
   markedBy: text("marked_by", { enum: ["client", "trainer"] }).notNull(),
+  status: text("status", { enum: ["present", "absent"] }).notNull().default("present"),
+  reason: text("reason"), // why they were absent
   createdAt: createdAt(),
 }, (t) => [uniqueIndex("attendance_client_date").on(t.clientId, t.date)]);
 
@@ -44,8 +46,10 @@ export const workoutPlan = sqliteTable("workout_plan", {
   dayOfWeek: integer("day_of_week").notNull(),
   exercise: text("exercise").notNull(),
   sets: integer("sets").notNull(),
-  reps: text("reps").notNull(), // "8-10", "12", "45s"
+  reps: text("reps").notNull(), // "8-10", "12" (unused for timed exercises)
+  metric: text("metric", { enum: ["weight", "time"] }).notNull().default("weight"),
   targetKg: real("target_kg"),
+  targetSec: integer("target_sec"), // timed exercises: plank, treadmill
   position: integer("position").notNull().default(0),
 }, (t) => [index("workout_plan_client_idx").on(t.clientId, t.dayOfWeek)]);
 
@@ -58,6 +62,7 @@ export const workoutLogs = sqliteTable("workout_logs", {
   sets: integer("sets").notNull(),
   reps: integer("reps").notNull(),
   weightKg: real("weight_kg").notNull().default(0),
+  durationSec: integer("duration_sec"), // set for timed exercises
   createdAt: createdAt(),
 }, (t) => [uniqueIndex("workout_logs_unique").on(t.clientId, t.date, t.exercise)]);
 

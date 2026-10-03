@@ -28,10 +28,12 @@ npm run dev
 3. Deploy, then open `https://<your-app>/setup`. It creates the tables and Prince's login, then switches itself off.
 4. Clients add the site to their home screen (works like an app).
 
-Schema changes: edit `src/db/schema.ts`, then run `npm run db:generate` and `npm run db:push`.
+Schema changes: edit `src/db/schema.ts`, then run `npm run db:generate` (writes `drizzle/*.sql` and `src/db/migrations.ts`). Deployed databases upgrade themselves on the next server start (`src/instrumentation.ts`), so there's nothing to run against Turso.
 
 ## Notes
 
 - WhatsApp nudges open WhatsApp with a pre-written message (wa.me links). No API cost. Automatic sending would need the WhatsApp Business API (e.g. Interakt, AiSensy).
 - Photos are compressed on the phone (~100KB) and stored in the DB. Move them to object storage if the number of clients grows past a few hundred.
 - Dates are in IST.
+- Exercises are tracked by weight × reps or by time (plank, cardio). For timed work, longer counts as better.
+- Attendance per day is present, absent (with a reason) or not marked. Clients can mark themselves absent; logging a workout overrides it.

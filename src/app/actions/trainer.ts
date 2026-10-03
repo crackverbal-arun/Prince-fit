@@ -4,7 +4,8 @@ import { and, eq, max } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db, users, packages, attendance, workoutPlan, mealPlan } from "@/db";
 import { requireTrainer } from "@/lib/dal";
-import { normalizePhone, num } from "@/lib/validate";
+import { normalizePhone, num, parseDuration } from "@/lib/validate";
+import { todayISO } from "@/lib/dates";
 
 const done = () => revalidatePath("/trainer", "layout");
 
@@ -72,12 +73,17 @@ export async function resetPassword(id: string, _: unknown, formData: FormData) 
   return { ok: `New password: ${password}` };
 }
 
-export async function toggleAttendance(id: string, date: string) {
+// status null clears the day back to "not marked".
+export async function setAttendance(id: string, date: string, status: "present" | "absent" | null, reason?: string) {
   await client(id);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > todayISO()) return;
   const where = and(eq(attendance.clientId, id), eq(attendance.date, date));
-  if (await db.query.attendance.findFirst({ where })) await db.delete(attendance).where(where);
-  else await db.insert(attendance).values({ clientId: id, date, markedBy: "trainer" });
+  if (status === null) await db.delete(attendance).where(where);
+  else {
+    const r = status === "absent" ? (reason ?? "").trim().slice(0, 140) || null : null;
+    await db.insert(attendance).values({ clientId: id, date, markedBy: "trainer", status, reason: r })
+      .onConflictDoUpdate({ target: [attendance.clientId, attendance.date], set: { status, reason: r, markedBy: "trainer" } });
+  }
   done();
 }
 
@@ -86,13 +92,15 @@ export async function addExercise(id: string, formData: FormData) {
   const day = num(formData.get("day"), 0, 6);
   const exercise = String(formData.get("exercise") ?? "").trim().slice(0, 80);
   const sets = num(formData.get("sets"), 1, 20);
-  const reps = String(formData.get("reps") ?? "").trim().slice(0, 20);
-  if (day === null || !exercise || !sets || !reps) return;
+  const timed = formData.get("metric") === "time";
+  const targetSec = timed ? parseDuration(formData.get("time")) : null;
+  const reps = timed ? "1" : String(formData.get("reps") ?? "").trim().slice(0, 20);
+  if (day === null || !exercise || !sets || !reps || (timed && !targetSec)) return;
   const [{ pos }] = await db.select({ pos: max(workoutPlan.position) }).from(workoutPlan)
     .where(and(eq(workoutPlan.clientId, id), eq(workoutPlan.dayOfWeek, day)));
   await db.insert(workoutPlan).values({
-    clientId: id, dayOfWeek: day, exercise, sets, reps,
-    targetKg: num(formData.get("kg"), 0, 500), position: (pos ?? 0) + 1,
+    clientId: id, dayOfWeek: day, exercise, sets, reps, metric: timed ? "time" : "weight", targetSec,
+    targetKg: timed ? null : num(formData.get("kg"), 0, 500), position: (pos ?? 0) + 1,
   });
   done();
 }
@@ -108,7 +116,7 @@ export async function copyDay(id: string, from: number, to: number) {
   const items = await db.select().from(workoutPlan).where(and(eq(workoutPlan.clientId, id), eq(workoutPlan.dayOfWeek, from)));
   await db.delete(workoutPlan).where(and(eq(workoutPlan.clientId, id), eq(workoutPlan.dayOfWeek, to)));
   if (items.length) {
-    await db.insert(workoutPlan).values(items.map((it) => ({ clientId: it.clientId, exercise: it.exercise, sets: it.sets, reps: it.reps, targetKg: it.targetKg, position: it.position, dayOfWeek: to })));
+    await db.insert(workoutPlan).values(items.map((it) => ({ clientId: it.clientId, exercise: it.exercise, sets: it.sets, reps: it.reps, metric: it.metric, targetKg: it.targetKg, targetSec: it.targetSec, position: it.position, dayOfWeek: to })));
   }
   done();
 }
