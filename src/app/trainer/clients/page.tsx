@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireTrainer } from "@/lib/dal";
 import { getClientSummaries } from "@/lib/queries";
 import { ClientRow } from "@/components/client-row";
@@ -12,7 +13,7 @@ export default async function Clients(props: PageProps<"/trainer/clients">) {
   const inactive = all.filter((c) => !c.active);
   return (
     <>
-      <h1 className="mb-4 text-2xl font-bold tracking-tight">Clients</h1>
+      <div className="mb-4 flex items-center justify-between"><h1 className="text-2xl font-bold tracking-tight">Clients</h1><Link href="/trainer/new" className="btn-primary btn-sm">+ Add client</Link></div>
       <ClientSearch initial={q} />
       <div className="mt-3">
         {active.length ? <div className="card divide-y divide-line p-0">{active.map((c) => <ClientRow key={c.id} c={c} />)}</div>

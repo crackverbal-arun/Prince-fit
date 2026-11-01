@@ -1,5 +1,5 @@
 import { BottomNav } from "@/components/bottom-nav";
-import { IconHome, IconPlus, IconUsers } from "@/components/icons";
+import { IconCalendar, IconGrid, IconHome, IconUsers } from "@/components/icons";
 
 export default function TrainerLayout({ children }: LayoutProps<"/trainer">) {
   return (
@@ -8,8 +8,9 @@ export default function TrainerLayout({ children }: LayoutProps<"/trainer">) {
       <BottomNav
         items={[
           { href: "/trainer", label: "Home", icon: <IconHome className="size-5" />, exact: true },
+          { href: "/trainer/schedule", label: "Schedule", icon: <IconCalendar className="size-5" /> },
           { href: "/trainer/clients", label: "Clients", icon: <IconUsers className="size-5" /> },
-          { href: "/trainer/new", label: "Add client", icon: <IconPlus className="size-5" /> },
+          { href: "/trainer/more", label: "More", icon: <IconGrid className="size-5" /> },
         ]}
       />
     </>

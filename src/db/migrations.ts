@@ -29,5 +29,37 @@ export const MIGRATIONS: string[][] = [
   [
     "CREATE TABLE IF NOT EXISTS `assessments` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`client_id` text NOT NULL,\n\t`date` text NOT NULL,\n\t`kind` text NOT NULL,\n\t`data` text NOT NULL,\n\t`created_at` integer DEFAULT (unixepoch()) NOT NULL,\n\tFOREIGN KEY (`client_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade\n);",
     "CREATE INDEX IF NOT EXISTS `assessments_client_idx` ON `assessments` (`client_id`,`date`);"
+  ],
+  [
+    "CREATE TABLE IF NOT EXISTS `food_logs` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`client_id` text NOT NULL,\n\t`date` text NOT NULL,\n\t`meal` text NOT NULL,\n\t`food_id` text,\n\t`name` text NOT NULL,\n\t`grams` real,\n\t`servings` real,\n\t`nutrients` text NOT NULL,\n\t`logged_by` text DEFAULT 'client' NOT NULL,\n\t`created_at` integer DEFAULT (unixepoch()) NOT NULL,\n\tFOREIGN KEY (`client_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,\n\tFOREIGN KEY (`food_id`) REFERENCES `foods`(`id`) ON UPDATE no action ON DELETE set null\n);",
+    "CREATE INDEX IF NOT EXISTS `food_logs_client_idx` ON `food_logs` (`client_id`,`date`);",
+    "CREATE TABLE IF NOT EXISTS `foods` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`name` text NOT NULL,\n\t`serving_label` text NOT NULL,\n\t`serving_g` real NOT NULL,\n\t`per100` text NOT NULL,\n\t`built_in` integer DEFAULT false NOT NULL,\n\t`created_at` integer DEFAULT (unixepoch()) NOT NULL\n);",
+    "CREATE TABLE IF NOT EXISTS `notifications` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`client_id` text NOT NULL,\n\t`session_id` text,\n\t`kind` text NOT NULL,\n\t`channel` text NOT NULL,\n\t`status` text NOT NULL,\n\t`body` text NOT NULL,\n\t`error` text,\n\t`created_at` integer DEFAULT (unixepoch()) NOT NULL,\n\tFOREIGN KEY (`client_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,\n\tFOREIGN KEY (`session_id`) REFERENCES `sessions`(`id`) ON UPDATE no action ON DELETE set null\n);",
+    "CREATE INDEX IF NOT EXISTS `notifications_session_idx` ON `notifications` (`session_id`);",
+    "CREATE TABLE IF NOT EXISTS `progress_photos` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`client_id` text NOT NULL,\n\t`date` text NOT NULL,\n\t`pose` text DEFAULT 'front' NOT NULL,\n\t`photo` text NOT NULL,\n\t`created_at` integer DEFAULT (unixepoch()) NOT NULL,\n\tFOREIGN KEY (`client_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade\n);",
+    "CREATE INDEX IF NOT EXISTS `progress_photos_client_idx` ON `progress_photos` (`client_id`,`date`);",
+    "CREATE TABLE IF NOT EXISTS `sessions` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`client_id` text NOT NULL,\n\t`date` text NOT NULL,\n\t`start_time` text NOT NULL,\n\t`duration_min` integer DEFAULT 60 NOT NULL,\n\t`title` text,\n\t`status` text DEFAULT 'scheduled' NOT NULL,\n\t`notes` text,\n\t`series_id` text,\n\t`reminder_sent_at` integer,\n\t`created_at` integer DEFAULT (unixepoch()) NOT NULL,\n\tFOREIGN KEY (`client_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade\n);",
+    "CREATE INDEX IF NOT EXISTS `sessions_date_idx` ON `sessions` (`date`,`start_time`);",
+    "CREATE INDEX IF NOT EXISTS `sessions_client_idx` ON `sessions` (`client_id`,`date`);",
+    "CREATE TABLE IF NOT EXISTS `settings` (\n\t`key` text PRIMARY KEY NOT NULL,\n\t`value` text NOT NULL\n);",
+    "CREATE TABLE IF NOT EXISTS `water_logs` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`client_id` text NOT NULL,\n\t`date` text NOT NULL,\n\t`ml` integer NOT NULL,\n\t`created_at` integer DEFAULT (unixepoch()) NOT NULL,\n\tFOREIGN KEY (`client_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade\n);",
+    "CREATE INDEX IF NOT EXISTS `water_logs_client_idx` ON `water_logs` (`client_id`,`date`);",
+    "ALTER TABLE `assessments` ADD `fields` text;",
+    "ALTER TABLE `body_stats` ADD `hips_cm` real;",
+    "ALTER TABLE `body_stats` ADD `thigh_cm` real;",
+    "ALTER TABLE `body_stats` ADD `calf_cm` real;",
+    "ALTER TABLE `body_stats` ADD `neck_cm` real;",
+    "ALTER TABLE `body_stats` ADD `body_fat` real;",
+    "ALTER TABLE `body_stats` ADD `notes` text;",
+    "ALTER TABLE `users` ADD `targets` text;",
+    "ALTER TABLE `users` ADD `assessment_template` text;",
+    "ALTER TABLE `workout_logs` ADD `kind` text;",
+    "ALTER TABLE `workout_logs` ADD `sets_detail` text;",
+    "ALTER TABLE `workout_logs` ADD `distance_km` real;",
+    "ALTER TABLE `workout_logs` ADD `calories` integer;",
+    "ALTER TABLE `workout_logs` ADD `avg_hr` integer;",
+    "ALTER TABLE `workout_logs` ADD `notes` text;",
+    "ALTER TABLE `workout_logs` ADD `logged_by` text;",
+    "ALTER TABLE `workout_plan` ADD `target_km` real;"
   ]
 ];

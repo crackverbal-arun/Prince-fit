@@ -2,6 +2,7 @@ import "server-only";
 import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { db, users, packages, attendance, mealPlan, mealLogs, workoutLogs, workoutPlan, bodyStats, assessments, type Package } from "@/db";
 import { REVIEW_EVERY_DAYS } from "./assessment";
+import { kindOf, metrics, overload, type Kind } from "./workout";
 import { addDays, daysBetween, todayISO } from "./dates";
 
 export type PackageStatus = {
@@ -162,30 +163,32 @@ export async function getWorkoutLogs(clientId: string, fromDate?: string) {
 
 type Log = Awaited<ReturnType<typeof getWorkoutLogs>>[number];
 
-// What "better" means for one log: longer hold/run for timed work, heavier (then more reps) otherwise.
-export function score(l: Pick<Log, "weightKg" | "reps" | "durationSec">) {
-  return l.durationSec != null ? l.durationSec : l.weightKg * 1000 + l.reps;
+// What "better" means for one log (e1RM for weights, longest hold, distance/duration for cardio).
+export function score(l: Log) {
+  return metrics(l).score;
 }
 
 export type ExerciseProgress = {
   exercise: string;
+  kind: Kind;
   timed: boolean;
-  points: { date: string; value: number }[]; // kg or seconds per session
+  points: { date: string; value: number }[]; // e1RM kg, seconds, or km per session
   first: number;
   latest: number;
   best: Log;
   sessions: number;
+  trend: ReturnType<typeof overload>;
 };
 
-// Per-exercise history for the Progress screen: trend, first vs latest, personal best.
+// Per-exercise history for the Progress screen: trend, first vs latest, personal best, overload status.
 export async function getExerciseProgress(clientId: string): Promise<ExerciseProgress[]> {
   const logs = (await getWorkoutLogs(clientId)).reverse(); // oldest first
   const byExercise = Map.groupBy(logs, (l) => l.exercise);
   return [...byExercise].map(([exercise, rows]) => {
-    const timed = rows.some((r) => r.durationSec != null);
-    const points = rows.map((r) => ({ date: r.date, value: timed ? (r.durationSec ?? 0) : r.weightKg }));
+    const kind = kindOf(rows.at(-1)!);
+    const points = rows.map((r) => ({ date: r.date, value: metrics(r).score }));
     const best = rows.reduce((b, r) => (score(r) > score(b) ? r : b));
-    return { exercise, timed, points, first: points[0].value, latest: points.at(-1)!.value, best, sessions: rows.length };
+    return { exercise, kind, timed: kind === "time", points, first: points[0].value, latest: points.at(-1)!.value, best, sessions: rows.length, trend: overload(rows) };
   }).sort((a, b) => b.points.at(-1)!.date.localeCompare(a.points.at(-1)!.date));
 }
 

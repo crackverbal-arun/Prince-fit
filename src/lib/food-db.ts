@@ -1,0 +1,81 @@
+// Starter food database, per 100 g. Values are approximate — taken from USDA FoodData Central for
+// single ingredients and typical home-style Indian recipes for cooked dishes (oil and salt vary a lot).
+// Inserted once into the `foods` table; Prince can edit, delete or add foods in the app.
+import type { Nutrients } from "./nutrition";
+
+type Row = [name: string, serving: string, servingG: number, kcal: number, protein: number, carbs: number, fat: number,
+  fiber: number, calcium: number, iron: number, magnesium: number, potassium: number, sodium: number, zinc: number,
+  vitA: number, vitC: number, vitD: number, vitB12: number];
+
+const ROWS: Row[] = [
+  // name, serving, g, kcal, P, C, F, fibre, Ca, Fe, Mg, K, Na, Zn, A(mcg), C(mg), D(mcg), B12(mcg)
+  ["Roti / chapati (whole wheat)", "1 roti", 40, 264, 9, 48, 4, 6, 30, 2.7, 80, 250, 10, 1.6, 0, 0, 0, 0],
+  ["Paratha (plain)", "1 paratha", 80, 326, 6.4, 45, 13, 4, 25, 2, 60, 160, 300, 1.2, 0, 0, 0, 0],
+  ["Rice, white (cooked)", "1 katori", 150, 130, 2.7, 28, 0.3, 0.4, 10, 0.2, 12, 35, 1, 0.5, 0, 0, 0, 0],
+  ["Rice, brown (cooked)", "1 katori", 150, 123, 2.7, 26, 1, 1.6, 3, 0.6, 39, 86, 4, 0.7, 0, 0, 0, 0],
+  ["Poha", "1 plate", 150, 180, 3.5, 30, 5, 1.5, 15, 2.5, 20, 90, 300, 0.5, 5, 5, 0, 0],
+  ["Upma", "1 plate", 150, 160, 4, 25, 5, 1.5, 15, 1, 20, 80, 320, 0.4, 5, 2, 0, 0],
+  ["Idli", "1 idli", 40, 132, 4.5, 27, 0.4, 1.5, 15, 0.9, 20, 60, 250, 0.5, 0, 0, 0, 0],
+  ["Dosa (plain)", "1 dosa", 80, 168, 3.9, 29, 3.7, 1, 10, 0.8, 18, 70, 250, 0.5, 0, 0, 0, 0],
+  ["Oats (dry)", "1 serving", 40, 389, 16.9, 66, 6.9, 10.6, 54, 4.7, 177, 429, 2, 4, 0, 0, 0, 0],
+  ["Bread, whole wheat", "1 slice", 28, 247, 13, 41, 3.4, 7, 160, 2.5, 76, 250, 450, 1.8, 0, 0, 0, 0],
+  ["Bread, white", "1 slice", 25, 265, 9, 49, 3.2, 2.7, 150, 3.6, 23, 100, 490, 0.7, 0, 0, 0, 0],
+  ["Dal, toor (cooked, with tadka)", "1 katori", 150, 105, 6, 15, 2.5, 3, 25, 1.3, 35, 200, 250, 0.8, 5, 2, 0, 0],
+  ["Dal, moong (cooked)", "1 katori", 150, 110, 7, 16, 2, 4, 25, 1.4, 45, 260, 250, 0.8, 5, 2, 0, 0],
+  ["Rajma curry", "1 katori", 150, 140, 6.5, 18, 4.5, 6, 40, 2, 40, 350, 300, 0.9, 10, 3, 0, 0],
+  ["Chole / chana masala", "1 katori", 150, 160, 7, 20, 6, 6, 45, 2.5, 40, 270, 320, 1.3, 10, 3, 0, 0],
+  ["Sambar", "1 katori", 150, 70, 3, 10, 2, 2.5, 30, 1, 20, 200, 300, 0.4, 40, 6, 0, 0],
+  ["Sprouted moong salad", "1 bowl", 100, 100, 7, 17, 0.5, 4, 30, 1.5, 50, 300, 150, 0.9, 5, 12, 0, 0],
+  ["Roasted chana", "1 handful", 30, 370, 21, 58, 6, 17, 60, 5, 140, 850, 30, 3, 3, 0, 0, 0],
+  ["Milk, toned", "1 glass", 200, 58, 3.3, 4.7, 3, 0, 120, 0.1, 11, 150, 45, 0.4, 30, 0, 0.1, 0.4],
+  ["Milk, full cream", "1 glass", 200, 67, 3.2, 4.7, 4.5, 0, 120, 0.1, 11, 150, 45, 0.4, 46, 0, 0.1, 0.4],
+  ["Curd / dahi", "1 katori", 100, 61, 3.5, 4.7, 3.3, 0, 121, 0.1, 12, 155, 46, 0.6, 27, 0, 0, 0.4],
+  ["Greek yogurt (plain)", "1 cup", 150, 73, 10, 4, 2, 0, 110, 0.1, 11, 140, 35, 0.5, 10, 0, 0, 0.7],
+  ["Paneer", "50 g", 50, 265, 18, 3.6, 20, 0, 480, 0.2, 25, 100, 20, 2.7, 210, 0, 0.3, 0.8],
+  ["Whey protein", "1 scoop", 30, 400, 78, 8, 6, 0, 400, 1, 100, 500, 250, 2, 0, 0, 0, 1],
+  ["Egg, whole (boiled)", "1 egg", 50, 155, 12.6, 1.1, 10.6, 0, 50, 1.2, 10, 126, 124, 1.1, 149, 0, 2.2, 1.1],
+  ["Egg white", "1 white", 33, 52, 10.9, 0.7, 0.2, 0, 7, 0.1, 11, 163, 166, 0, 0, 0, 0, 0.1],
+  ["Buttermilk / chaas", "1 glass", 200, 25, 1.5, 2.5, 1, 0, 60, 0, 6, 75, 150, 0.2, 10, 0, 0, 0.2],
+  ["Chicken breast (grilled)", "100 g", 100, 165, 31, 0, 3.6, 0, 15, 1, 29, 256, 74, 1, 6, 0, 0.1, 0.3],
+  ["Chicken curry (home-style)", "1 katori", 150, 150, 14, 4, 9, 1, 20, 1, 20, 220, 350, 1.2, 40, 3, 0.1, 0.3],
+  ["Fish curry", "1 katori", 150, 130, 14, 3, 7, 0.5, 40, 1, 25, 280, 350, 0.6, 30, 2, 2, 1.5],
+  ["Fish (grilled)", "100 g", 100, 120, 22, 0, 3, 0, 30, 0.6, 30, 350, 80, 0.5, 15, 0, 3, 1.5],
+  ["Mutton curry", "1 katori", 150, 200, 15, 3, 14, 0.5, 20, 2, 20, 250, 350, 3.5, 10, 2, 0, 2],
+  ["Tofu (firm)", "100 g", 100, 144, 17, 2.8, 8.7, 2.3, 683, 2.7, 58, 237, 14, 1.6, 0, 0, 0, 0],
+  ["Soya chunks (dry)", "1 serving", 30, 345, 52, 33, 0.5, 13, 350, 10, 240, 2000, 20, 2.5, 0, 0, 0, 0],
+  ["Mixed veg sabzi", "1 katori", 150, 90, 2.5, 9, 5, 3, 35, 0.8, 20, 250, 300, 0.4, 150, 15, 0, 0],
+  ["Palak / spinach sabzi", "1 katori", 150, 80, 3, 5, 5.5, 2.5, 110, 2.5, 70, 450, 300, 0.6, 450, 15, 0, 0],
+  ["Palak paneer", "1 katori", 150, 150, 7, 5, 11, 2, 220, 2, 50, 350, 350, 1.2, 400, 10, 0.1, 0.3],
+  ["Aloo sabzi", "1 katori", 150, 120, 2, 15, 6, 2, 12, 0.6, 20, 350, 300, 0.3, 0, 10, 0, 0],
+  ["Bhindi sabzi", "1 katori", 150, 100, 2.2, 8, 7, 3.5, 80, 0.7, 50, 280, 300, 0.5, 30, 15, 0, 0],
+  ["Salad (cucumber, tomato, onion)", "1 bowl", 150, 20, 0.8, 4, 0.2, 1.2, 15, 0.3, 10, 180, 5, 0.2, 25, 10, 0, 0],
+  ["Broccoli (steamed)", "1 cup", 150, 35, 2.4, 7, 0.4, 3.3, 40, 0.7, 21, 293, 41, 0.5, 77, 65, 0, 0],
+  ["Banana", "1 medium", 118, 89, 1.1, 23, 0.3, 2.6, 5, 0.3, 27, 358, 1, 0.2, 3, 8.7, 0, 0],
+  ["Apple", "1 medium", 180, 52, 0.3, 14, 0.2, 2.4, 6, 0.1, 5, 107, 1, 0, 3, 4.6, 0, 0],
+  ["Orange", "1 medium", 130, 47, 0.9, 12, 0.1, 2.4, 40, 0.1, 10, 181, 0, 0.1, 11, 53, 0, 0],
+  ["Papaya", "1 bowl", 150, 43, 0.5, 11, 0.3, 1.7, 20, 0.3, 21, 182, 8, 0.1, 47, 61, 0, 0],
+  ["Guava", "1 medium", 100, 68, 2.6, 14, 1, 5.4, 18, 0.3, 22, 417, 2, 0.2, 31, 228, 0, 0],
+  ["Mango", "1 cup", 165, 60, 0.8, 15, 0.4, 1.6, 11, 0.2, 10, 168, 1, 0.1, 54, 36, 0, 0],
+  ["Almonds", "10 almonds", 12, 579, 21, 22, 50, 12.5, 269, 3.7, 270, 733, 1, 3.1, 0, 0, 0, 0],
+  ["Peanuts (roasted)", "1 handful", 30, 585, 24, 21, 50, 8, 54, 2.3, 176, 658, 6, 3.3, 0, 0, 0, 0],
+  ["Peanut butter", "1 tbsp", 16, 588, 25, 20, 50, 6, 43, 1.9, 154, 558, 430, 2.9, 0, 0, 0, 0],
+  ["Walnuts", "4 halves", 15, 654, 15, 14, 65, 6.7, 98, 2.9, 158, 441, 2, 3.1, 1, 1.3, 0, 0],
+  ["Flax seeds", "1 tbsp", 10, 534, 18, 29, 42, 27, 255, 5.7, 392, 813, 30, 4.3, 0, 0.6, 0, 0],
+  ["Ghee", "1 tsp", 5, 900, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 684, 0, 0, 0],
+  ["Cooking oil", "1 tsp", 5, 884, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  ["Samosa", "1 samosa", 70, 308, 5, 32, 17, 3, 20, 1.5, 20, 200, 420, 0.5, 5, 5, 0, 0],
+  ["Biscuits (digestive)", "2 biscuits", 30, 480, 7, 66, 21, 3.5, 80, 2.5, 25, 170, 500, 0.6, 0, 0, 0, 0],
+  ["Tea with milk & sugar", "1 cup", 120, 50, 1.5, 7.5, 1.5, 0, 50, 0, 5, 70, 20, 0.2, 10, 0, 0, 0.15],
+  ["Coffee with milk & sugar", "1 cup", 120, 55, 1.6, 8, 1.6, 0, 55, 0, 8, 110, 22, 0.2, 10, 0, 0, 0.15],
+  ["Sugar", "1 tsp", 5, 400, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  ["Veg biryani", "1 plate", 250, 160, 3.5, 24, 5.5, 2, 25, 0.8, 20, 120, 350, 0.5, 30, 4, 0, 0],
+  ["Chicken biryani", "1 plate", 300, 180, 9, 20, 7, 1, 20, 0.9, 20, 150, 380, 1, 15, 2, 0.1, 0.2],
+  ["Coconut water", "1 glass", 240, 19, 0.7, 3.7, 0.2, 1.1, 24, 0.3, 25, 250, 105, 0.1, 0, 2.4, 0, 0],
+];
+
+const KEYS = ["kcal", "protein", "carbs", "fat", "fiber", "calcium", "iron", "magnesium", "potassium", "sodium", "zinc", "vitA", "vitC", "vitD", "vitB12"] as const;
+
+export const BUILT_IN_FOODS = ROWS.map(([name, servingLabel, servingG, ...vals]) => ({
+  name, servingLabel, servingG,
+  per100: Object.fromEntries(KEYS.map((k, i) => [k, vals[i]])) as Nutrients,
+}));

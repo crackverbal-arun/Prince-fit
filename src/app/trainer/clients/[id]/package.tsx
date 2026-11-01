@@ -4,6 +4,7 @@ import { addPackage, recordPayment } from "@/app/actions/trainer";
 import { PackageCard } from "@/components/package-card";
 import { Submit } from "@/components/submit";
 import { Empty } from "@/components/ui";
+import { PackageEdit } from "./package-edit";
 
 export async function PackageTab({ clientId }: { clientId: string }) {
   const { current, others: past } = await getPackages(clientId);
@@ -20,6 +21,7 @@ export async function PackageTab({ clientId }: { clientId: string }) {
               <Submit className="btn-primary shrink-0">Record</Submit>
             </form>
           )}
+          <PackageEdit clientId={clientId} pkg={current.pkg} />
         </PackageCard>
       ) : <Empty>No package yet.</Empty>}
 
@@ -47,6 +49,7 @@ export async function PackageTab({ clientId }: { clientId: string }) {
                   <Submit className="btn-primary shrink-0">Record</Submit>
                 </form>
               )}
+              <PackageEdit clientId={clientId} pkg={s.pkg} />
             </PackageCard>
           ))}
         </>

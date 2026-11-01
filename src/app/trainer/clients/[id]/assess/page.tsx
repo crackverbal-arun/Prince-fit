@@ -4,7 +4,8 @@ import { and, eq } from "drizzle-orm";
 import { db, users } from "@/db";
 import { requireTrainer } from "@/lib/dal";
 import { getAssessments } from "@/lib/queries";
-import { CARRY_FORWARD, SECTIONS, type AssessmentData } from "@/lib/assessment";
+import { CARRY_FORWARD, sectionsOf, type AssessmentData } from "@/lib/assessment";
+import { getTemplate } from "@/lib/q-assessment";
 import { fmtDate, todayISO } from "@/lib/dates";
 import { saveAssessment } from "@/app/actions/assessment";
 import { AssessmentField } from "@/components/assessment-field";
@@ -26,6 +27,8 @@ export default async function AssessPage(props: PageProps<"/trainer/clients/[id]
     ?? Object.fromEntries(CARRY_FORWARD.filter((k) => previous?.data[k] !== undefined).map((k) => [k, previous!.data[k]]));
   if (!editing && previous && typeof previous.data.age === "number") values.age = previous.data.age;
   const kind = editing?.kind ?? (all.length ? "review" : "baseline");
+  const template = editing ? null : await getTemplate(id);
+  const sections = editing ? sectionsOf(editing) : template!.sections;
 
   return (
     <form action={saveAssessment.bind(null, id, editing?.id ?? null)} className="pb-24">
@@ -34,6 +37,11 @@ export default async function AssessPage(props: PageProps<"/trainer/clients/[id]
       <p className="mt-1 text-sm text-muted">
         {previous ? <>Grey &ldquo;last&rdquo; values are from {fmtDate(previous.date)}. </> : null}Skip anything you didn&apos;t test. Takes 60–90 min with the client.
       </p>
+      {!editing && (
+        <Link href={`/trainer/assessment-template?client=${id}`} className="mt-2 inline-block text-sm font-semibold underline underline-offset-2">
+          {template!.source === "client" ? `Using ${client.name.split(" ")[0]}'s custom tests · edit` : "Change, replace or remove tests for this client"}
+        </Link>
+      )}
 
       <section className="card mt-4 grid grid-cols-2 gap-2">
         <label><span className="label">Date</span><input name="date" type="date" defaultValue={editing?.date ?? todayISO()} max={todayISO()} required className="input" /></label>
@@ -50,7 +58,7 @@ export default async function AssessPage(props: PageProps<"/trainer/clients/[id]
         </fieldset>
       </section>
 
-      {SECTIONS.map((s, i) => (
+      {sections.map((s, i) => (
         <details key={s.id} open className="card group mt-3 [&_summary::-webkit-details-marker]:hidden">
           <summary className="flex cursor-pointer list-none items-center justify-between font-semibold">
             <span><span className="mr-2 text-muted">{i + 1}.</span>{s.title}</span>

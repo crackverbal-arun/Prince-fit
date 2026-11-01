@@ -1,5 +1,5 @@
 import { BottomNav } from "@/components/bottom-nav";
-import { IconChart, IconClipboard, IconHome } from "@/components/icons";
+import { IconApple, IconChart, IconClipboard, IconHome } from "@/components/icons";
 
 export default function ClientLayout({ children }: LayoutProps<"/me">) {
   return (
@@ -8,6 +8,7 @@ export default function ClientLayout({ children }: LayoutProps<"/me">) {
       <BottomNav
         items={[
           { href: "/me", label: "Today", icon: <IconHome className="size-5" />, exact: true },
+          { href: "/me/food", label: "Food", icon: <IconApple className="size-5" /> },
           { href: "/me/progress", label: "Progress", icon: <IconChart className="size-5" /> },
           { href: "/me/plan", label: "My plan", icon: <IconClipboard className="size-5" /> },
         ]}

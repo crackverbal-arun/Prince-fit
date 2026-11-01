@@ -28,3 +28,19 @@ export async function requireClient() {
   if (user.role !== "client") redirect("/trainer");
   return user;
 }
+
+/**
+ * For records both sides can write (workout logs, food, water, body stats):
+ * Prince can act on any client; a client only on themselves.
+ */
+export async function requireActor(clientId: string) {
+  const user = await getUser();
+  if (!user) redirect("/login");
+  if (user.role === "client") {
+    if (user.id !== clientId) throw new Error("Not allowed");
+    return { user, by: "client" as const, client: user };
+  }
+  const client = await db.query.users.findFirst({ where: eq(users.id, clientId) });
+  if (!client || client.role !== "client") throw new Error("Client not found");
+  return { user, by: "trainer" as const, client };
+}

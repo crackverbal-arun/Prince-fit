@@ -1,7 +1,9 @@
 import { getWorkoutPlan } from "@/lib/queries";
 import { DAYS } from "@/lib/dates";
-import { addExercise, copyDay, removeExercise } from "@/app/actions/trainer";
-import { IconTrash } from "@/components/icons";
+import Link from "next/link";
+import { addExercise, copyDay } from "@/app/actions/trainer";
+import { PlanItemRow } from "./plan-item";
+import { todayISO } from "@/lib/dates";
 import { CopyDay } from "./copy-day";
 import { AddExerciseForm } from "./add-exercise";
 import { planTarget } from "@/lib/format";
@@ -12,6 +14,13 @@ export async function WorkoutTab({ clientId }: { clientId: string }) {
   const plan = await getWorkoutPlan(clientId);
   return (
     <div className="space-y-3">
+      <div className="card space-y-2">
+        <div className="text-sm font-semibold">Track a session</div>
+        <p className="text-xs text-muted">Record sets, reps, weights and cardio as you train. Logging also marks attendance.</p>
+        <Link href={`/trainer/clients/${clientId}/log`} className="btn-primary w-full">Log today&apos;s session</Link>
+        <form action={`/trainer/clients/${clientId}/log`} className="flex gap-2"><input name="date" type="date" max={todayISO()} defaultValue={todayISO()} className="input flex-1" aria-label="Session date" /><button className="btn-ghost">Log past day</button></form>
+      </div>
+      <h2 className="h-section">Weekly plan</h2>
       <AddExerciseForm action={addExercise.bind(null, clientId)} />
 
       {ORDER.map((d) => {
@@ -24,15 +33,7 @@ export async function WorkoutTab({ clientId }: { clientId: string }) {
             </div>
             {items.length ? (
               <div className="divide-y divide-line">
-                {items.map((p) => (
-                  <div key={p.id} className="flex items-center gap-2 px-4 py-2.5">
-                    <span className="flex-1 text-sm">{p.exercise}</span>
-                    <span className="text-sm text-muted">{planTarget(p)}</span>
-                    <form action={removeExercise.bind(null, clientId, p.id)}>
-                      <button aria-label={`Remove ${p.exercise}`} className="grid size-8 place-items-center rounded-lg text-muted hover:text-bad"><IconTrash className="size-4" /></button>
-                    </form>
-                  </div>
-                ))}
+                {items.map((p) => <PlanItemRow key={p.id} clientId={clientId} item={p} target={planTarget(p)} />)}
               </div>
             ) : <p className="px-4 pb-3 pt-1 text-sm text-muted">Rest day</p>}
           </section>

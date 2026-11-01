@@ -1,12 +1,16 @@
 import { requireClient } from "@/lib/dal";
-import { getAttendance, getMealLogs, getMealPlan, getWorkoutLogs, getWorkoutPlan, score } from "@/lib/queries";
-import { addDays, clockDuration, dayOfWeek, DAYS, todayISO } from "@/lib/dates";
-import { logSummary, planTarget } from "@/lib/format";
+import Link from "next/link";
+import { getAttendance, getMealLogs, getMealPlan } from "@/lib/queries";
+import { getDailyNutrition, getNextSession, getTargets, getWater } from "@/lib/q-client";
+import { getLoggerItems } from "@/lib/q-workout";
+import { fmtTime, longDate } from "@/lib/schedule";
+import { WorkoutLogger } from "@/components/workout-logger";
+import { WaterWidget } from "@/components/water-widget";
+import { addDays, dayOfWeek, DAYS, todayISO } from "@/lib/dates";
 import { checkIn } from "@/app/actions/client";
 import { Submit } from "@/components/submit";
 import { Empty } from "@/components/ui";
 import { IconCheck } from "@/components/icons";
-import { ExerciseRow } from "./exercise-row";
 import { MealRow } from "./meal-row";
 import { AbsentForm } from "./absent-form";
 
@@ -14,17 +18,19 @@ export default async function Today() {
   const me = await requireClient();
   const today = todayISO();
   const dow = dayOfWeek(today);
-  const [att, plan, logs, meals, mealLogs] = await Promise.all([
+  const [att, items, meals, mealLogs, next, { targets }, [nut], water] = await Promise.all([
     getAttendance(me.id, addDays(today, -30)),
-    getWorkoutPlan(me.id),
-    getWorkoutLogs(me.id),
+    getLoggerItems(me.id, today),
     getMealPlan(me.id),
     getMealLogs(me.id, today),
+    getNextSession(me.id),
+    getTargets(me.id),
+    getDailyNutrition(me.id, today, today),
+    getWater(me.id, today),
   ]);
 
   const todayMark = att.get(today);
   const visits = [...att.values()].filter((a) => a.status === "present").length;
-  const todays = plan.filter((p) => p.dayOfWeek === dow);
   const week = Array.from({ length: 7 }, (_, i) => addDays(today, i - 6));
   const hour = Number(new Intl.DateTimeFormat("en-IN", { hour: "numeric", hourCycle: "h23", timeZone: "Asia/Kolkata" }).format(new Date()));
   const greet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -80,38 +86,27 @@ export default async function Today() {
         </section>
       )}
 
-      <h2 className="h-section">Today&apos;s workout · {DAYS[dow]}</h2>
-      {todays.length ? (
-        <div className="space-y-2">
-          {todays.map((p) => {
-            const timed = p.metric === "time";
-            const history = logs.filter((l) => l.exercise === p.exercise);
-            const todayLog = history.find((l) => l.date === today);
-            const last = history.find((l) => l.date < today);
-            const prevBest = Math.max(0, ...history.filter((l) => l.date < today).map(score));
-            return (
-              <ExerciseRow
-                key={p.id}
-                exercise={p.exercise}
-                timed={timed}
-                target={planTarget(p)}
-                defaults={{
-                  sets: todayLog?.sets ?? p.sets,
-                  reps: todayLog?.reps ?? (parseInt(p.reps) || 10),
-                  weight: todayLog?.weightKg ?? last?.weightKg ?? p.targetKg ?? 0,
-                  time: clockDuration(todayLog?.durationSec ?? last?.durationSec ?? p.targetSec ?? 60),
-                }}
-                last={last ? logSummary(last) : null}
-                logged={!!todayLog}
-                isPR={!!todayLog && prevBest > 0 && score(todayLog) > prevBest}
-              />
-            );
-          })}
+      {next && (
+        <div className="card mt-3 flex items-center gap-3">
+          <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-volt text-xs font-bold leading-tight text-volt-ink">{next.s.date === today ? "TODAY" : next.s.date === addDays(today, 1) ? "TMRW" : longDate(next.s.date).split(" ")[1]}</div>
+          <div><div className="text-xs text-muted">Next session</div><div className="font-semibold">{longDate(next.s.date)} · {fmtTime(next.s.startTime)}</div><div className="text-xs text-muted">{next.s.title ?? "Training"} with Prince · {next.s.durationMin} min</div></div>
         </div>
-      ) : <Empty>Rest day. Recover well. 🧘</Empty>}
+      )}
+
+      <div className="mt-3"><WaterWidget clientId={me.id} date={today} entries={water.map((w) => ({ id: w.id, ml: w.ml }))} targetMl={targets.waterMl} compact /></div>
+
+      <Link href="/me/food" className="card mt-3 block">
+        <div className="flex items-baseline justify-between"><span className="text-sm font-semibold">Food today</span><span className="text-xs text-muted">Log food ›</span></div>
+        <div className="mt-1 text-sm"><b className="text-lg">{Math.round(nut.totals.kcal ?? 0)}</b><span className="text-muted"> / {targets.kcal} kcal</span> · <b>{Math.round(nut.totals.protein ?? 0)}</b><span className="text-muted"> / {targets.protein} g protein</span></div>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-bg ring-1 ring-line"><div className="h-full rounded-full bg-ink" style={{ width: `${Math.min(100, ((nut.totals.kcal ?? 0) / targets.kcal) * 100)}%` }} /></div>
+      </Link>
+
+      <h2 className="h-section">Today&apos;s workout · {DAYS[dow]}</h2>
+      {!items.length && <p className="mb-2 px-1 text-sm text-muted">Rest day on your plan. Did some training anyway? Add it below.</p>}
+      <WorkoutLogger clientId={me.id} date={today} items={items} />
 
       <h2 className="h-section flex justify-between">
-        <span>Meals</span>
+        <span>Diet plan from Prince</span>
         {meals.length > 0 && <span className="normal-case tracking-normal">{mealLogs.length}/{meals.length} done</span>}
       </h2>
       {meals.length ? (

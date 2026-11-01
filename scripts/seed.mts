@@ -5,6 +5,8 @@ import { drizzle } from "drizzle-orm/libsql";
 import * as s from "../src/db/schema";
 import { addDays, todayISO, dayOfWeek } from "../src/lib/dates";
 import { parseDuration } from "../src/lib/validate";
+import { BUILT_IN_FOODS } from "../src/lib/food-db";
+import { scale } from "../src/lib/nutrition";
 
 try { process.loadEnvFile(".env.local"); } catch {}
 const db = drizzle({ connection: { url: process.env.DATABASE_URL ?? "file:local.db", authToken: process.env.DATABASE_AUTH_TOKEN }, schema: s });
@@ -24,6 +26,8 @@ if (phone.length !== 10 || password.length < 6 || password === "change-me") {
 }
 const { created } = await upsertUser({ role: "trainer", name: process.env.TRAINER_NAME || "Prince", phone, password });
 console.log(created ? `Trainer login created: ${phone}` : `Trainer ${phone} already exists`);
+
+if (!(await db.select().from(s.foods).limit(1)).length) await db.insert(s.foods).values(BUILT_IN_FOODS.map((f) => ({ ...f, builtIn: true })));
 
 if (process.argv.includes("--demo")) {
   const today = todayISO();
@@ -68,7 +72,9 @@ if (process.argv.includes("--demo")) {
     for (const day of d.days) for (const [i, [exercise, sets, reps, kg]] of workouts[day].entries())
       await db.insert(s.workoutPlan).values(kg
         ? { clientId: id, dayOfWeek: day, exercise, sets, reps, targetKg: kg, position: i }
-        : { clientId: id, dayOfWeek: day, exercise, sets, reps: "1", metric: "time", targetSec: parseDuration(reps), position: i });
+        : exercise === "Treadmill"
+          ? { clientId: id, dayOfWeek: day, exercise, sets: 1, reps: "1", metric: "cardio", targetSec: parseDuration(reps), targetKm: 2.5, position: i }
+          : { clientId: id, dayOfWeek: day, exercise, sets, reps: "1", metric: "time", targetSec: parseDuration(reps), position: i });
     const mealIds = [];
     for (const [i, [slot, description]] of meals.entries())
       mealIds.push((await db.insert(s.mealPlan).values({ clientId: id, slot, description, position: i }).returning())[0].id);
@@ -83,10 +89,19 @@ if (process.argv.includes("--demo")) {
         await db.insert(s.attendance).values({ clientId: id, date, markedBy: r() > 0.3 ? "client" : "trainer" }).onConflictDoNothing();
         const progress = (42 - back) / 42;
         for (const [exercise, sets, reps, kg] of workouts[dayOfWeek(date)]) {
-          const v = kg
-            ? { reps: parseInt(reps), weightKg: Math.round((kg * (0.85 + progress * 0.25)) * 2) / 2 }
-            : { reps: 1, durationSec: Math.round(parseDuration(reps)! * (0.7 + progress * 0.45) / 5) * 5 };
-          await db.insert(s.workoutLogs).values({ clientId: id, date, exercise, sets, ...v }).onConflictDoNothing();
+          let v;
+          if (kg) {
+            const w = Math.round((kg * (0.85 + progress * 0.25)) * 2) / 2, r = parseInt(reps);
+            const detail = Array.from({ length: sets }, (_, k) => ({ reps: k === sets - 1 ? Math.max(1, r - 2) : r, kg: w }));
+            v = { kind: "weight" as const, sets, reps: r, weightKg: w, setsDetail: detail };
+          } else if (exercise === "Treadmill") {
+            const sec = Math.round(1200 * (0.8 + progress * 0.3) / 30) * 30, km = +(sec / 60 * (0.11 + progress * 0.03)).toFixed(2);
+            v = { kind: "cardio" as const, sets: 1, reps: 1, weightKg: 0, durationSec: sec, distanceKm: km, calories: Math.round(sec / 60 * 9) };
+          } else {
+            const sec = Math.round(parseDuration(reps)! * (0.7 + progress * 0.45) / 5) * 5;
+            v = { kind: "time" as const, sets, reps: 1, weightKg: 0, durationSec: sec, setsDetail: Array.from({ length: sets }, () => ({ sec })) };
+          }
+          await db.insert(s.workoutLogs).values({ clientId: id, date, exercise, loggedBy: r() > 0.5 ? "trainer" as const : "client" as const, ...v }).onConflictDoNothing();
         }
       } else if (planned && (quitting && recent ? true : r() < 0.5)) {
         const reason = quitting ? "Injury: lower back flare-up" : ["Work", "Travel", "Sick", "Family: cousin's wedding"][Math.floor(r() * 4)];
@@ -95,7 +110,7 @@ if (process.argv.includes("--demo")) {
       for (const mealId of mealIds) if (r() < (quitting && recent ? 0.15 : d.diet)) await db.insert(s.mealLogs).values({ clientId: id, mealPlanId: mealId, date }).onConflictDoNothing();
       if (back % 7 === 0) {
         weight = +(weight - (quitting ? 0.1 : 0.6) + r() * 0.4).toFixed(1);
-        await db.insert(s.bodyStats).values({ clientId: id, date, weightKg: weight, waistCm: +(weight * 0.98).toFixed(1), chestCm: 98, armCm: 33 });
+        await db.insert(s.bodyStats).values({ clientId: id, date, weightKg: weight, waistCm: +(weight * 0.98).toFixed(1), chestCm: 98, armCm: +(33 + (42 - back) / 60).toFixed(1), hipsCm: +(weight * 1.05).toFixed(1), thighCm: +(weight * 0.6).toFixed(1) });
       }
     }
     if (d.name.startsWith("Rahul")) {
@@ -115,6 +130,26 @@ if (process.argv.includes("--demo")) {
     }
     if (d.name.startsWith("Sneha")) {
       await db.insert(s.assessments).values({ clientId: id, date: addDays(today, -86), kind: "baseline", data: { age: 29, gender: "Female", weight: 64, pushups30s: 8, plank: 50, squats1min: 32, restingHr: 72 } });
+    }
+    // Food + water for the last 14 days (more consistent for good-diet clients)
+    const foodsList = await db.select().from(s.foods);
+    const pick = (name: string) => foodsList.find((f) => f.name.startsWith(name))!;
+    const dayMenu: [string, string, number][] = [["Breakfast", "Oats", 1], ["Breakfast", "Milk, toned", 1], ["Breakfast", "Banana", 1], ["Lunch", "Roti", 3], ["Lunch", "Dal, toor", 1], ["Lunch", "Mixed veg", 1], ["Lunch", "Curd", 1], ["Snacks", "Almonds", 1], ["Snacks", "Tea with milk", 1], ["Dinner", "Rice, white", 1], ["Dinner", d.name.startsWith("Ananya") ? "Paneer" : "Chicken curry", 1], ["Dinner", "Salad", 1]];
+    for (let back = 13; back >= 0; back--) {
+      const date = addDays(today, -back);
+      if (r() < d.diet) for (const [meal, name, n] of dayMenu) if (r() < 0.85) {
+        const f = pick(name); await db.insert(s.foodLogs).values({ clientId: id, date, meal, foodId: f.id, name: f.name, servings: n, grams: f.servingG * n, nutrients: scale(f.per100, f.servingG * n) });
+      }
+      const glasses = Math.round(4 + r() * 8 * d.diet);
+      for (let g = 0; g < glasses; g++) await db.insert(s.waterLogs).values({ clientId: id, date, ml: 250 });
+    }
+    // Sessions: last 2 weeks (done / no-show) and next 2 weeks on their training days
+    const series = crypto.randomUUID(), time = ["07:00", "18:30", "06:30", "19:00"][demos.indexOf(d)];
+    for (let k = -14; k <= 14; k++) {
+      const date = addDays(today, k);
+      if (!d.days.includes(dayOfWeek(date))) continue;
+      const status = k < 0 ? (quitting && k > -7 ? "no_show" as const : "completed" as const) : "scheduled" as const;
+      await db.insert(s.sessions).values({ clientId: id, date, startTime: time, durationMin: 60, title: "Strength", status, seriesId: series });
     }
     console.log(`Demo client ${d.name} · ${d.phone} / demo123`);
   }

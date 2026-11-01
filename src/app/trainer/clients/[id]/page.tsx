@@ -4,26 +4,37 @@ import { and, eq } from "drizzle-orm";
 import { db, users } from "@/db";
 import { requireTrainer } from "@/lib/dal";
 import { getAssessments, getClientSummaries } from "@/lib/queries";
+import { todayISO } from "@/lib/dates";
 import { AssessmentReport } from "@/components/assessment-report";
+import { WorkoutProgress } from "@/components/workout-progress";
+import { History } from "@/components/history";
+import { NutritionView } from "@/components/nutrition-view";
+import { TargetsForm } from "@/components/targets-form";
+import { BodyView } from "@/components/body-view";
 import { nudgeText, waLink } from "@/lib/whatsapp";
 import { Avatar, Chip, flagTone } from "@/components/ui";
 import { IconBack, IconWhatsApp } from "@/components/icons";
-import { ProgressView } from "@/components/progress-view";
 import { OverviewTab } from "./overview";
 import { WorkoutTab } from "./workout";
 import { DietTab } from "./diet";
 import { PackageTab } from "./package";
+import { ScheduleTab } from "./schedule";
 
-const TABS = [["overview", "Overview"], ["assessment", "Assessment"], ["workout", "Workout"], ["diet", "Diet"], ["progress", "Progress"], ["package", "Package"]] as const;
+const TABS = [["overview", "Overview"], ["schedule", "Schedule"], ["workout", "Workout"], ["progress", "Progress"], ["history", "History"],
+  ["nutrition", "Nutrition"], ["body", "Body"], ["assessment", "Assessment"], ["package", "Package"]] as const;
 
 export default async function ClientPage(props: PageProps<"/trainer/clients/[id]">) {
   await requireTrainer();
   const { id } = await props.params;
   const sp = await props.searchParams;
-  const tab = String(sp.tab ?? "overview");
+  const str = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : undefined);
+  const tab = str("tab") ?? "overview";
   const client = await db.query.users.findFirst({ where: and(eq(users.id, id), eq(users.role, "client")) });
   if (!client) notFound();
   const summary = (await getClientSummaries()).find((c) => c.id === id)!;
+  const base = `/trainer/clients/${id}`;
+  const today = todayISO();
+  const date = str("date") && /^\d{4}-\d{2}-\d{2}$/.test(str("date")!) && str("date")! <= today ? str("date")! : today;
 
   return (
     <>
@@ -52,11 +63,22 @@ export default async function ClientPage(props: PageProps<"/trainer/clients/[id]
       </nav>
 
       <div className="mt-4">
-        {tab === "workout" ? <WorkoutTab clientId={id} />
-          : tab === "diet" ? <DietTab clientId={id} />
-          : tab === "progress" ? <ProgressView clientId={id} />
+        {tab === "schedule" ? <ScheduleTab clientId={id} />
+          : tab === "workout" ? <WorkoutTab clientId={id} />
+          : tab === "progress" ? <WorkoutProgress clientId={id} exerciseHref={(n) => `${base}/exercise?name=${encodeURIComponent(n)}`} />
+          : tab === "history" ? <History clientId={id} month={/^\d{4}-\d{2}$/.test(str("month") ?? "") ? str("month")! : today.slice(0, 7)} monthHref={(m) => `?tab=history&month=${m}`} editHref={(d) => `${base}/log?date=${d}`} />
+          : tab === "nutrition" ? (
+            <div className="space-y-3">
+              <TargetsForm clientId={id} />
+              <NutritionView clientId={id} date={date} range={(["day", "week", "month"] as const).find((r) => r === str("range")) ?? "day"} canEditTargets
+                href={(p) => `?tab=nutrition&date=${p.date ?? date}&range=${p.range ?? "day"}`} />
+              <h2 className="h-section">Diet plan (what Prince prescribes)</h2>
+              <DietTab clientId={id} />
+            </div>
+          )
+          : tab === "body" ? <BodyView clientId={id} metric={str("metric")} href={(p) => `?tab=body&metric=${p.metric ?? ""}`} bmiHref={`/trainer/bmi?client=${id}`} />
           : tab === "package" ? <PackageTab clientId={id} />
-          : tab === "assessment" ? <AssessmentReport list={await getAssessments(id)} selectedId={sp.a ? String(sp.a) : undefined} clientId={id} editable />
+          : tab === "assessment" ? <AssessmentReport list={await getAssessments(id)} selectedId={str("a")} vs={str("vs")} justSaved={str("done") === "1"} clientId={id} editable />
           : <OverviewTab client={client} />}
       </div>
     </>

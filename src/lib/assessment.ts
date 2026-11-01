@@ -146,7 +146,7 @@ export function bmi(d: AssessmentData) {
 }
 
 // Plain warnings Prince should not miss before programming intense work.
-export function healthFlags(d: AssessmentData): string[] {
+export function healthFlags(d: AssessmentData, sections: Section[] = SECTIONS): string[] {
   const out: string[] = [];
   const age = Number(d.age) || null;
   const rhr = Number(d.restingHr);
@@ -155,8 +155,45 @@ export function healthFlags(d: AssessmentData): string[] {
   if (bp && (Number(bp[1]) >= 140 || Number(bp[2] ?? 0) >= 90)) out.push(`Blood pressure ${d.bloodPressure} is in the high range. Get medical clearance before heavy lifting or intense cardio.`);
   const peak = Math.max(Number(d.hrFinish) || 0, Number(d.hr11min) || 0);
   if (age && peak > 220 - age) out.push(`Peak heart rate ${peak} bpm is above the age-estimated max (${220 - age}). Keep cardio at a talk-test pace for now.`);
-  for (const f of SECTIONS.find((s) => s.id === "pain")!.fields) {
+  for (const f of sections.find((s) => s.id === "pain")?.fields ?? []) {
     if (f.type === "scale" && Number(d[f.key]) >= 6) out.push(`${f.label} pain ${d[f.key]}/10. Avoid loading it and consider a physio review.`);
+  }
+  return out;
+}
+
+export const FIELD_TYPES = ["number", "duration", "scale", "choice", "multi", "text", "textarea", "height"] as const;
+
+/** The form an assessment was taken with (older ones predate custom templates). */
+export function sectionsOf(a: { fields?: unknown }): Section[] {
+  return (validateSections(a.fields) ?? SECTIONS);
+}
+
+/** Server-side check of a template coming from the editor. Returns null if it's unusable. */
+export function validateSections(raw: unknown): Section[] | null {
+  if (!Array.isArray(raw) || !raw.length || raw.length > 40) return null;
+  const keys = new Set<string>();
+  const out: Section[] = [];
+  for (const s of raw as Section[]) {
+    if (!s || typeof s.title !== "string" || !Array.isArray(s.fields)) return null;
+    const fields: Field[] = [];
+    for (const f of s.fields) {
+      if (!f || typeof f.key !== "string" || !/^[A-Za-z0-9_]{1,40}$/.test(f.key) || keys.has(f.key)) return null;
+      if (!FIELD_TYPES.includes(f.type) || typeof f.label !== "string" || !f.label.trim()) return null;
+      keys.add(f.key);
+      const base = { key: f.key, label: f.label.trim().slice(0, 60), better: f.better === "up" || f.better === "down" ? f.better : undefined };
+      switch (f.type) {
+        case "number": fields.push({ ...base, type: "number", unit: typeof f.unit === "string" ? f.unit.slice(0, 12) : undefined, step: typeof f.step === "number" && f.step > 0 ? f.step : undefined }); break;
+        case "scale": fields.push({ ...base, type: "scale", min: Number.isInteger(f.min) ? f.min : 0, max: Number.isInteger(f.max) && f.max > (f.min ?? 0) && f.max <= 20 ? f.max : 10 }); break;
+        case "choice": case "multi": {
+          const opts = Array.isArray(f.options) ? f.options.map(String).map((o) => o.trim().slice(0, 30)).filter(Boolean).slice(0, 12) : [];
+          if (opts.length < 2) return null;
+          fields.push({ ...base, type: f.type, options: opts }); break;
+        }
+        case "text": case "textarea": fields.push({ ...base, type: f.type, placeholder: typeof f.placeholder === "string" ? f.placeholder.slice(0, 80) : undefined }); break;
+        default: fields.push({ ...base, type: f.type } as Field);
+      }
+    }
+    out.push({ id: String(s.id ?? `s${out.length}`).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 30) || `s${out.length}`, title: s.title.trim().slice(0, 60) || "Section", fields });
   }
   return out;
 }

@@ -2,15 +2,16 @@
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { db, assessments, bodyStats, users } from "@/db";
+import { db, assessments, bodyStats, settings, users } from "@/db";
 import { requireTrainer } from "@/lib/dal";
-import { FIELDS, type AssessmentData } from "@/lib/assessment";
+import { sectionsOf, validateSections, type AssessmentData, type Field, type Section } from "@/lib/assessment";
+import { getTemplate } from "@/lib/q-assessment";
 import { num, parseDuration } from "@/lib/validate";
 import { todayISO } from "@/lib/dates";
 
-function parse(formData: FormData): AssessmentData {
+function parse(formData: FormData, fields: Field[]): AssessmentData {
   const data: AssessmentData = {};
-  for (const f of FIELDS) {
+  for (const f of fields) {
     const raw = formData.get(f.key);
     let v: AssessmentData[string] | null = null;
     switch (f.type) {
@@ -37,12 +38,17 @@ export async function saveAssessment(clientId: string, assessmentId: string | nu
   if (!client) throw new Error("Client not found");
   const date = /^\d{4}-\d{2}-\d{2}$/.test(String(formData.get("date"))) ? String(formData.get("date")) : todayISO();
   const kind = formData.get("kind") === "baseline" ? "baseline" : "review";
-  const data = parse(formData);
+  // Editing keeps the form the assessment was taken with; a new one uses the client's current template.
+  const existing = assessmentId ? await db.query.assessments.findFirst({ where: and(eq(assessments.id, assessmentId), eq(assessments.clientId, clientId)) }) : null;
+  const sections: Section[] = existing ? sectionsOf(existing) : (await getTemplate(clientId)).sections;
+  const data = parse(formData, sections.flatMap((x) => x.fields));
+  let savedId = assessmentId;
 
-  if (assessmentId) {
-    await db.update(assessments).set({ date, kind, data }).where(and(eq(assessments.id, assessmentId), eq(assessments.clientId, clientId)));
+  if (existing) {
+    await db.update(assessments).set({ date, kind, data, fields: sections }).where(eq(assessments.id, existing.id));
   } else {
-    await db.insert(assessments).values({ clientId, date, kind, data });
+    const [row] = await db.insert(assessments).values({ clientId, date, kind, data, fields: sections }).returning({ id: assessments.id });
+    savedId = row.id;
     // Feed weight/waist into the progress chart too.
     if (typeof data.weight === "number" || typeof data.waist === "number") {
       await db.insert(bodyStats).values({
@@ -54,7 +60,7 @@ export async function saveAssessment(clientId: string, assessmentId: string | nu
   }
   revalidatePath("/trainer", "layout");
   revalidatePath("/me", "layout");
-  redirect(`/trainer/clients/${clientId}?tab=assessment`);
+  redirect(`/trainer/clients/${clientId}?tab=assessment&a=${savedId}&done=1`);
 }
 
 export async function deleteAssessment(clientId: string, assessmentId: string) {
@@ -62,4 +68,24 @@ export async function deleteAssessment(clientId: string, assessmentId: string) {
   await db.delete(assessments).where(and(eq(assessments.id, assessmentId), eq(assessments.clientId, clientId)));
   revalidatePath("/trainer", "layout");
   redirect(`/trainer/clients/${clientId}?tab=assessment`);
+}
+
+/** Save the assessment form for one client (clientId) or the default for everyone (null). */
+export async function saveTemplate(clientId: string | null, json: string): Promise<{ error?: string; ok?: string }> {
+  await requireTrainer();
+  let parsed: unknown;
+  try { parsed = JSON.parse(json); } catch { return { error: "Couldn't read the template." }; }
+  const sections = validateSections(parsed);
+  if (!sections) return { error: "Every test needs a name, and choice tests need at least 2 options." };
+  if (clientId) await db.update(users).set({ assessmentTemplate: sections }).where(and(eq(users.id, clientId), eq(users.role, "client")));
+  else await db.insert(settings).values({ key: "assessment_template", value: sections }).onConflictDoUpdate({ target: settings.key, set: { value: sections } });
+  revalidatePath("/trainer", "layout");
+  return { ok: clientId ? "Saved for this client" : "Saved as the default for all clients" };
+}
+
+/** Drop a client's custom form so they follow the default again. */
+export async function resetTemplate(clientId: string) {
+  await requireTrainer();
+  await db.update(users).set({ assessmentTemplate: null }).where(eq(users.id, clientId));
+  revalidatePath("/trainer", "layout");
 }

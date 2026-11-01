@@ -2,7 +2,8 @@
 import bcrypt from "bcryptjs";
 import { and, eq, max } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { db, users, packages, attendance, workoutPlan, mealPlan } from "@/db";
+import { redirect } from "next/navigation";
+import { db, users, packages, attendance, workoutPlan, mealPlan, notifications, sessions, foodLogs, waterLogs, progressPhotos, assessments, bodyStats, mealLogs, workoutLogs } from "@/db";
 import { requireTrainer } from "@/lib/dal";
 import { normalizePhone, num, parseDuration } from "@/lib/validate";
 import { todayISO } from "@/lib/dates";
@@ -92,14 +93,16 @@ export async function addExercise(id: string, formData: FormData) {
   const day = num(formData.get("day"), 0, 6);
   const exercise = String(formData.get("exercise") ?? "").trim().slice(0, 80);
   const sets = num(formData.get("sets"), 1, 20);
-  const timed = formData.get("metric") === "time";
+  const metric = (["weight", "time", "cardio"] as const).find((k) => k === formData.get("metric")) ?? "weight";
+  const timed = metric !== "weight";
   const targetSec = timed ? parseDuration(formData.get("time")) : null;
+  const targetKm = metric === "cardio" ? num(formData.get("km"), 0.1, 300) : null;
   const reps = timed ? "1" : String(formData.get("reps") ?? "").trim().slice(0, 20);
-  if (day === null || !exercise || !sets || !reps || (timed && !targetSec)) return;
+  if (day === null || !exercise || !sets || !reps || (metric === "time" && !targetSec) || (metric === "cardio" && !targetSec && !targetKm)) return;
   const [{ pos }] = await db.select({ pos: max(workoutPlan.position) }).from(workoutPlan)
     .where(and(eq(workoutPlan.clientId, id), eq(workoutPlan.dayOfWeek, day)));
   await db.insert(workoutPlan).values({
-    clientId: id, dayOfWeek: day, exercise, sets, reps, metric: timed ? "time" : "weight", targetSec,
+    clientId: id, dayOfWeek: day, exercise, sets, reps, metric, targetSec, targetKm,
     targetKg: timed ? null : num(formData.get("kg"), 0, 500), position: (pos ?? 0) + 1,
   });
   done();
@@ -116,7 +119,7 @@ export async function copyDay(id: string, from: number, to: number) {
   const items = await db.select().from(workoutPlan).where(and(eq(workoutPlan.clientId, id), eq(workoutPlan.dayOfWeek, from)));
   await db.delete(workoutPlan).where(and(eq(workoutPlan.clientId, id), eq(workoutPlan.dayOfWeek, to)));
   if (items.length) {
-    await db.insert(workoutPlan).values(items.map((it) => ({ clientId: it.clientId, exercise: it.exercise, sets: it.sets, reps: it.reps, metric: it.metric, targetKg: it.targetKg, targetSec: it.targetSec, position: it.position, dayOfWeek: to })));
+    await db.insert(workoutPlan).values(items.map((it) => ({ clientId: it.clientId, exercise: it.exercise, sets: it.sets, reps: it.reps, metric: it.metric, targetKg: it.targetKg, targetSec: it.targetSec, targetKm: it.targetKm, position: it.position, dayOfWeek: to })));
   }
   done();
 }
@@ -160,4 +163,46 @@ export async function recordPayment(id: string, packageId: string, formData: For
   if (!p) return;
   await db.update(packages).set({ paid: Math.min(p.amount, p.paid + amount) }).where(eq(packages.id, packageId));
   done();
+}
+
+export async function updatePackage(id: string, packageId: string, formData: FormData) {
+  await client(id);
+  const sessions = num(formData.get("sessions"), 1, 500);
+  const amount = num(formData.get("amount"), 0, 10_000_000);
+  const paid = num(formData.get("paid"), 0, 10_000_000);
+  const start = String(formData.get("start") ?? ""), end = String(formData.get("end") ?? "");
+  if (!sessions || amount === null || !start || !end || end < start) return;
+  await db.update(packages).set({
+    name: String(formData.get("name") ?? "").trim() || `${sessions} sessions`,
+    totalSessions: sessions, startDate: start, endDate: end, amount, paid: Math.min(amount, paid ?? 0),
+  }).where(and(eq(packages.id, packageId), eq(packages.clientId, id)));
+  done();
+}
+
+export async function deletePackage(id: string, packageId: string) {
+  await client(id);
+  await db.delete(packages).where(and(eq(packages.id, packageId), eq(packages.clientId, id)));
+  done();
+}
+
+export async function updateMeal(id: string, itemId: string, formData: FormData) {
+  await client(id);
+  const slot = String(formData.get("slot") ?? "").trim().slice(0, 30);
+  const description = String(formData.get("description") ?? "").trim().slice(0, 300);
+  if (!slot || !description) return;
+  await db.update(mealPlan).set({ slot, description }).where(and(eq(mealPlan.id, itemId), eq(mealPlan.clientId, id)));
+  done();
+}
+
+/** Permanently removes a client and everything recorded for them. Requires typing their name. */
+export async function deleteClient(id: string, _: unknown, formData: FormData) {
+  const c = await client(id);
+  if (String(formData.get("confirm") ?? "").trim().toLowerCase() !== c.name.trim().toLowerCase()) return { error: `Type "${c.name}" exactly to confirm.` };
+  // Delete children explicitly (don't rely on the database enforcing ON DELETE CASCADE).
+  for (const t of [notifications, sessions, foodLogs, waterLogs, progressPhotos, assessments, bodyStats, mealLogs, mealPlan, workoutLogs, workoutPlan, attendance, packages]) {
+    await db.delete(t).where(eq(t.clientId, id));
+  }
+  await db.delete(users).where(eq(users.id, id));
+  done();
+  redirect("/trainer/clients");
 }
